@@ -9,6 +9,6 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # 2️⃣  now grab the preview SDK straight from GitHub
-RUN pip install --no-cache-dir "mcp-sdk @ git+https://github.com/modelcontextprotocol/mcp-python-sdk.git@main"
+RUN pip install --no-cache-dir "mcp-sdk @ git+https://github.com/gabrieluxcam/mcp-uxcam-android.git@main"
 
 CMD ["python", "/app/uxcam_server.py"]
