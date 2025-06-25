@@ -1,12 +1,30 @@
 {
   "name": "uxcam_android_integration",
-  "description": "Adds UXCam Android SDK (3.+) & init code",
+  "description": "Adds the UXCam Android SDK (v3.+) & init code",
   "version": "0.1.0",
+
   "entrypoint": [
     "docker",
     "run",
     "-i",
     "--rm",
     "gabriel5891/uxcam-android-mcp:0.1"
+  ],
+
+  "tools": [
+    {
+      "name": "add_uxcam_android",
+      "description": "Add UXCam SDK (v3.+) & init call to an Android project",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "appKeyRef": {
+            "type": "string",
+            "description": "e.g. BuildConfig.UXCAM_KEY or \"YOUR_APP_KEY\""
+          }
+        },
+        "required": ["appKeyRef"]
+      }
+    }
   ]
 }
