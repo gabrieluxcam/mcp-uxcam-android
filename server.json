@@ -2,5 +2,11 @@
   "name": "uxcam_android_integration",
   "description": "Adds UXCam Android SDK (3.+) & init code",
   "version": "0.1.0",
-  "entrypoint": ["docker", "run", "-i", "--rm", "yourorg/uxcam-android-mcp:0.1"]
+  "entrypoint": [
+    "docker",
+    "run",
+    "-i",
+    "--rm",
+    "gabriel5891/uxcam-android-mcp:0.1"
+  ]
 }
