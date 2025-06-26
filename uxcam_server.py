@@ -1,10 +1,17 @@
-# uxcam_server.py  –  Android-only, compliant with UXCam rules (Updated for current MCP SDK)
+#!/usr/bin/env python3
+"""
+UXCam MCP Server - Android SDK Integration
+Compatible with latest MCP SDK
+"""
 
-from mcp.server import Server
-from mcp.types import Tool
+import asyncio
+import json
 from pathlib import Path
 import re
-import asyncio
+from typing import Any, Sequence
+
+from mcp.server import Server
+from mcp.types import Tool, TextContent, CallToolResult
 
 # ---------- constants ----------
 GRADLE_GROOVY   = Path("app/build.gradle")
@@ -42,15 +49,17 @@ UXCam.startWithConfiguration(config)
 
 # ---------- helper functions ----------
 def add_repo():
+    """Add UXCam Maven repository to settings.gradle"""
     target = SETTINGS_KTS if SETTINGS_KTS.exists() else SETTINGS_GROOVY
     if not target.exists():
         return "⚠️ settings.gradle file not found"
 
     txt = target.read_text()
-    snippet = MAVEN_REPO_SNIPPET_KTS if target.suffix == ".kts" \
-             else MAVEN_REPO_SNIPPET
+    snippet = MAVEN_REPO_SNIPPET_KTS if target.suffix == ".kts" else MAVEN_REPO_SNIPPET
+    
     if snippet in txt:
         return "ℹ️ Maven repo already present"
+        
     new = re.sub(r"repositories\s*{",
                  lambda m: m.group(0) + f"\n        {snippet}",
                  txt, count=1)
@@ -58,14 +67,17 @@ def add_repo():
     return f"✔️ Added UXCam Maven repo in {target}"
 
 def add_dependency():
+    """Add UXCam dependency to app/build.gradle"""
     target = GRADLE_KTS if GRADLE_KTS.exists() else GRADLE_GROOVY
     if not target.exists():
         return "⚠️ app/build.gradle file not found"
 
     txt = target.read_text()
     line = DEP_LINE_KTS if target.suffix == ".kts" else DEP_LINE_GROOVY
+    
     if line in txt:
         return "ℹ️ Dependency already present"
+        
     new = re.sub(r"dependencies\s*{",
                  lambda m: m.group(0) + f"\n    {line}",
                  txt, count=1)
@@ -73,10 +85,12 @@ def add_dependency():
     return f"✔️ Added UXCam dependency in {target}"
 
 def find_application_source():
+    """Find Application class files"""
     return (list(Path("app/src").rglob("*Application*.kt")) +
             list(Path("app/src").rglob("*Application*.java")))
 
 def inject_init(app_key_expr):
+    """Inject UXCam initialization code"""
     files = find_application_source()
     if not files:
         return "⚠️ No Application class found (wizard will fall back to Activity)"
@@ -84,46 +98,66 @@ def inject_init(app_key_expr):
     f = files[0]
     code = f.read_text()
     snippet = (KOTLIN_SNIPPET if f.suffix == ".kt" else JAVA_SNIPPET) % app_key_expr
+    
     if "UXCam.startWithConfiguration" in code:
         return f"ℹ️ Init already present in {f.name}"
 
-    # naive: drop into onCreate()
+    # Add to onCreate() method
     code = re.sub(r'onCreate\s*\([^)]*\)\s*{',
                   lambda m: m.group(0) + "\n        " + snippet.strip().replace("\n", "\n        "),
                   code, count=1)
     f.write_text(code)
     return f"✔️ Inserted init code in {f.name}"
 
-# ---------- MCP server setup ----------
-server = Server("uxcam_android_integration")
+# ---------- MCP Server ----------
+app = Server("uxcam-android-integration")
 
-@server.tool()
-async def add_uxcam_android(appKeyRef: str) -> str:
-    """
-    Add UXCam SDK (v3.+) & init call to an Android project
-    
-    Args:
-        appKeyRef: Reference used in code – e.g. BuildConfig.UXCAM_KEY or "MY_KEY"
-    
-    Returns:
-        Summary of integration steps performed
-    """
-    reports = [
-        add_repo(),
-        add_dependency(),
-        inject_init(appKeyRef)
+@app.list_tools()
+async def handle_list_tools() -> list[Tool]:
+    """List available tools"""
+    return [
+        Tool(
+            name="add_uxcam_android",
+            description="Add UXCam SDK (v3.+) & init call to an Android project",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "appKeyRef": {
+                        "type": "string",
+                        "description": "Reference used in code – e.g. BuildConfig.UXCAM_KEY or \"MY_KEY\""
+                    }
+                },
+                "required": ["appKeyRef"]
+            }
+        )
     ]
-    return "; ".join([r for r in reports if r])
+
+@app.call_tool()
+async def handle_call_tool(name: str, arguments: dict) -> Sequence[TextContent]:
+    """Handle tool calls"""
+    if name == "add_uxcam_android":
+        app_key_ref = arguments.get("appKeyRef", "BuildConfig.UXCAM_KEY")
+        
+        reports = [
+            add_repo(),
+            add_dependency(),
+            inject_init(app_key_ref)
+        ]
+        result = "; ".join([r for r in reports if r])
+        
+        return [TextContent(type="text", text=result)]
+    else:
+        raise ValueError(f"Unknown tool: {name}")
 
 async def main():
-    # Import here to avoid issues with event loops
+    # Run the server using stdio transport
     from mcp.server.stdio import stdio_server
     
     async with stdio_server() as (read_stream, write_stream):
-        await server.run(
+        await app.run(
             read_stream,
             write_stream,
-            server.create_initialization_options()
+            app.create_initialization_options()
         )
 
 if __name__ == "__main__":
