@@ -1,8 +1,10 @@
-# uxcam_server.py  –  Android-only, compliant with UXCam rules
+# uxcam_server.py  –  Android-only, compliant with UXCam rules (Updated for current MCP SDK)
 
-from mcp.server import McpServer, tool
+from mcp.server import Server
+from mcp.types import Tool
 from pathlib import Path
 import re
+import asyncio
 
 # ---------- constants ----------
 GRADLE_GROOVY   = Path("app/build.gradle")
@@ -92,29 +94,37 @@ def inject_init(app_key_expr):
     f.write_text(code)
     return f"✔️ Inserted init code in {f.name}"
 
-# ---------- MCP tool ----------
-@tool(
-    name="add_uxcam_android",
-    description="Add UXCam SDK (v3.+) & init call to an Android project",
-    input_schema={
-        "type": "object",
-        "properties": {
-            "appKeyRef": {  # accepts BuildConfig.SOMETHING or quoted key
-                "type": "string",
-                "description": "Reference used in code – e.g. BuildConfig.UXCAM_KEY or \"MY_KEY\""
-            }
-        },
-        "required": ["appKeyRef"]
-    },
-    output_schema={"type": "object",
-                   "properties": {"summary": {"type": "string"}}}
-)
-def integrate(appKeyRef: str):
+# ---------- MCP server setup ----------
+server = Server("uxcam_android_integration")
+
+@server.tool()
+async def add_uxcam_android(appKeyRef: str) -> str:
+    """
+    Add UXCam SDK (v3.+) & init call to an Android project
+    
+    Args:
+        appKeyRef: Reference used in code – e.g. BuildConfig.UXCAM_KEY or "MY_KEY"
+    
+    Returns:
+        Summary of integration steps performed
+    """
     reports = [
         add_repo(),
         add_dependency(),
         inject_init(appKeyRef)
     ]
-    return {"summary": "; ".join([r for r in reports if r])}
+    return "; ".join([r for r in reports if r])
 
-McpServer(tools=[integrate]).serve_stdio()
+async def main():
+    # Import here to avoid issues with event loops
+    from mcp.server.stdio import stdio_server
+    
+    async with stdio_server() as (read_stream, write_stream):
+        await server.run(
+            read_stream,
+            write_stream,
+            server.create_initialization_options()
+        )
+
+if __name__ == "__main__":
+    asyncio.run(main())
